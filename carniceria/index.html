@@ -46,8 +46,8 @@
         .scroll-window {
             position: absolute;
             top: 20px;
-            left: 715px;
-            width: 1150px; 
+            left: 680px;
+            width: 1220px; 
             height: 1000px; 
             overflow: hidden;
             z-index: 2;
@@ -57,8 +57,8 @@
 
         #scroll-container {
             display: grid;
-            grid-template-columns: repeat(3, 1fr);
-            gap: 40px;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
             position: relative;
             top: 0;
         }
@@ -103,7 +103,7 @@
 
     <div id="main-canvas">
         <div class="background-layer"></div>
-        <img class="side-image" src="Carne.png">
+        <img class="side-image" src="carniceria.png">
         <div class="scroll-window">
             <div id="scroll-container"></div>
         </div>
@@ -149,6 +149,7 @@
         }
 
         function render(products) {
+            
             products.forEach(p => {
                 const html = `
                     <div class="card">
@@ -185,7 +186,7 @@
         }
 
         init();
-        setInterval(init, 300000); 
+        setInterval(init, 30000); 
     </script>
 </body>
 </html>
