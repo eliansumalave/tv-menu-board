@@ -131,10 +131,25 @@
 
         /* TU LÓGICA DE DATOS */
         const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQdYJo8hW_1GmjLp9NQ4lT3jPU-Q0fqghtzMp3ypnWbgLILR1j-NYxqarjlEWPPy4_fozgD-A-DER_U/pub?gid=0&single=true&output=csv";
+        const CONFIG_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRpYcutQnWmMA4HQHTf0Bo_qwK6al5zp-m4QdgaXw4sNOO7jIFJ2-uKtzX3645UfvsIBp1P2BXmz38Z/pub?gid=0&single=true&output=csv";
         const scrollContainer = document.getElementById('scroll-container');
-        let scrollSpeed = 0.5;
+
+        let scrollSpeed = 2;
+
+        async function loadConfig() {
+            try {
+                const response = await fetch(CONFIG_URL);
+                const text = await response.text();
+                const lines = text.split('\n');
+                lines.forEach(line => {
+                    const [key, value] = line.split(',');
+                    if (key === 'scroll') scrollSpeed = parseFloat(value) || scrollSpeed;
+                });
+            } catch (e) { console.warn("No se pudo cargar la configuración", e); }
+        }
 
         async function init() {
+            loadConfig();
             try {
                 const response = await fetch(CSV_URL);
                 const text = await response.text();
@@ -186,7 +201,7 @@
         }
 
         init();
-        setInterval(init, 30000); 
+        setInterval(init, 60000); 
     </script>
 </body>
 </html>
