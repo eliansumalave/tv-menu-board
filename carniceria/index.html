@@ -31,11 +31,10 @@
             overflow: hidden;
             background-image: var(--bg-image);
             background-size: cover;
-            flex-shrink: 0; /* Evita que el flexbox lo deforme */
-            transform-origin: center center; /* Escala desde el centro */
+            flex-shrink: 0; 
+            transform-origin: center center; 
         }
 
-        /* Ajustes de tus elementos originales (ahora relativos al canvas) */
         .background-layer {
             position: absolute;
             top: 0; left: 0;
@@ -51,8 +50,9 @@
             height: 1000px; 
             overflow: hidden;
             z-index: 2;
-            -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%);
-            mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%);
+            /* Suavizado en los bordes superior e inferior */
+            -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 5%, black 95%, transparent 100%);
+            mask-image: linear-gradient(to bottom, transparent 0%, black 5%, black 95%, transparent 100%);
         }
 
         #scroll-container {
@@ -61,6 +61,8 @@
             gap: 20px;
             position: relative;
             top: 0;
+            /* Importante para la animación */
+            will-change: transform;
         }
 
         .card {
@@ -74,6 +76,13 @@
             justify-content: space-between;
             box-sizing: border-box;
             box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+
+        /* Clase para tarjetas de relleno invisibles */
+        .card.hidden-spacer {
+            visibility: hidden;
+            background: transparent;
+            box-shadow: none;
         }
 
         .card img { height: 280px; width: 100%; object-fit: contain; }
@@ -115,26 +124,24 @@
             const canvas = document.getElementById('main-canvas');
             const windowWidth = window.innerWidth;
             const windowHeight = window.innerHeight;
-            
-            // Calculamos la escala basada en el ancho y alto disponible
             const scaleX = windowWidth / 1920;
             const scaleY = windowHeight / 1080;
-            
-            // Usamos la escala más pequeña para que no se corte nada (fit)
             const scale = Math.min(scaleX, scaleY);
-            
             canvas.style.transform = `scale(${scale})`;
         }
 
         window.addEventListener('resize', scaleMenu);
-        scaleMenu(); // Ejecutar al cargar
+        scaleMenu(); 
 
-        /* TU LÓGICA DE DATOS */
+        /* LÓGICA DE DATOS */
         const CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQdYJo8hW_1GmjLp9NQ4lT3jPU-Q0fqghtzMp3ypnWbgLILR1j-NYxqarjlEWPPy4_fozgD-A-DER_U/pub?gid=0&single=true&output=csv";
         const CONFIG_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vRpYcutQnWmMA4HQHTf0Bo_qwK6al5zp-m4QdgaXw4sNOO7jIFJ2-uKtzX3645UfvsIBp1P2BXmz38Z/pub?gid=0&single=true&output=csv";
         const scrollContainer = document.getElementById('scroll-container');
 
-        let scrollSpeed = 2;
+        let scrollSpeed = 1.5; // Slightly slower default for smoothness
+        let animationFrameId;
+        let singleSetHeight = 0;
+        let currentScroll = 0;
 
         async function loadConfig() {
             try {
@@ -149,58 +156,107 @@
         }
 
         async function init() {
-            loadConfig();
+            await loadConfig();
             try {
                 const response = await fetch(CSV_URL);
                 const text = await response.text();
-                const products = csvToJson(text);
+                let products = csvToJson(text);
                 
-                scrollContainer.innerHTML = ''; // Limpiar antes de renderizar
-                render(products);
-                render(products); 
+                // 1. FILLER LOGIC: Add invisible items to complete the row
+                // This prevents the "misaligned" grid look.
+                const itemsPerRow = 4;
+                const remainder = products.length % itemsPerRow;
+                if (remainder !== 0) {
+                    const itemsToAdd = itemsPerRow - remainder;
+                    for (let i = 0; i < itemsToAdd; i++) {
+                        products.push({ isSpacer: true });
+                    }
+                }
+
+                // Stop previous animation before rebuilding
+                if (animationFrameId) cancelAnimationFrame(animationFrameId);
+
+                // Clear container
+                scrollContainer.innerHTML = ''; 
+
+                // 2. RENDER LOGIC
+                // Render FIRST set
+                renderItems(products);
                 
+                // Measure the precise height of one full set including the gap
+                // We assume there is a row-gap. The distance to the start of the next set
+                // is the current height + the grid row gap.
+                const style = window.getComputedStyle(scrollContainer);
+                const rowGap = parseFloat(style.getPropertyValue('row-gap')) || 20; 
+                singleSetHeight = scrollContainer.scrollHeight + rowGap;
+
+                // Render SECOND set (Duplicate)
+                renderItems(products);
+
+                // Start scrolling
+                // Reset scroll position to 0 to avoid visual glitches on reload
+                currentScroll = 0;
                 startInfiniteScroll();
+
             } catch (e) { console.error("Error cargando CSV", e); }
         }
 
-        function render(products) {
-            
+        function renderItems(products) {
             products.forEach(p => {
-                const html = `
-                    <div class="card">
-                        <img src="${p.imagen}">
-                        <div class="product-name">${p.nombre}</div>
-                        <div>
-                            <div class="price-ref"><span>REF</span> $${p.ref}</div>
-                            <div class="price-divisa">Divisa $${p.divisa}</div>
-                        </div>
-                    </div>`;
+                let html = '';
+                if (p.isSpacer) {
+                    // Render an invisible card to hold the grid space
+                    html = `<div class="card hidden-spacer"></div>`;
+                } else {
+                    html = `
+                        <div class="card">
+                            <img src="${p.imagen}" onerror="this.style.display='none'">
+                            <div class="product-name">${p.nombre}</div>
+                            <div>
+                                <div class="price-ref"><span>REF</span> $${p.ref}</div>
+                                <div class="price-divisa">Divisa $${p.divisa}</div>
+                            </div>
+                        </div>`;
+                }
                 scrollContainer.insertAdjacentHTML('beforeend', html);
             });
         }
 
         function startInfiniteScroll() {
-            let currentScroll = 0;
             function step() {
                 currentScroll -= scrollSpeed;
-                scrollContainer.style.transform = `translateY(${currentScroll}px)`;
-                if (Math.abs(currentScroll) >= scrollContainer.offsetHeight / 2) {
-                    currentScroll = 0;
+                
+                // 3. SMOOTH LOOP LOGIC
+                // Instead of offsetHeight / 2, we check against the measured singleSetHeight
+                if (Math.abs(currentScroll) >= singleSetHeight) {
+                    // We add the height instead of setting to 0 to keep sub-pixel smoothness
+                    // This prevents the tiny "jump" if speed is a decimal like 1.5
+                    currentScroll += singleSetHeight;
                 }
-                requestAnimationFrame(step);
+                
+                scrollContainer.style.transform = `translateY(${currentScroll}px)`;
+                animationFrameId = requestAnimationFrame(step);
             }
-            requestAnimationFrame(step);
+            animationFrameId = requestAnimationFrame(step);
         }
 
         function csvToJson(csv) {
             const lines = csv.split('\n');
             return lines.slice(1).map(line => {
                 const cols = line.split(',');
-                return { nombre: cols[0], ref: cols[1], divisa: cols[2], imagen: cols[3] };
-            }).filter(p => p.nombre);
+                // Simple safety check to ensure line has data
+                if(cols.length < 3) return null;
+                return { 
+                    nombre: cols[0]?.trim(), 
+                    ref: cols[1]?.trim(), 
+                    divisa: cols[2]?.trim(), 
+                    imagen: cols[3]?.trim() 
+                };
+            }).filter(p => p && p.nombre);
         }
 
         init();
+        // Updated interval to prevent memory leaks with animation frames
         setInterval(init, 60000); 
     </script>
 </body>
